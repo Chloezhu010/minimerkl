@@ -1,15 +1,66 @@
-# Remix compiler artifacts
-**/artifacts/
-**/artifacts/**
-
-# Remix plugin state folders
-deps/
-states/
-
-# Debug info
-*.dbg.json
-*.tsbuildinfo
-
-# Optional
+# Environment variables (CRITICAL - contains API keys & secrets!)
 .env
 .env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# TypeScript compiled output
+dist/
+build/
+*.js
+*.js.map
+*.d.ts
+!contracts/**/*.js  # Allow Foundry scripts
+
+# Foundry artifacts
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/
+
+# Database files (your SQLite data)
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Remix artifacts (legacy)
+**/artifacts/
+deps/
+states/
+*.dbg.json
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Personal notes (optional - remove these lines if you want to commit them)
+notes.md
+project_plan.md
+CLAUDE.md
