@@ -20,7 +20,52 @@ async function getProvider() {
     return provider;
 }
 
-async function queryEvents(provider: ethers.JsonRpcProvider, fromBlock: number, toBlock: number) {
+interface UserPosition {
+    address: string;                // user address
+    aUsdcBalance: bigint;           // supply balance
+    debtUsdcBalance: bigint;        // borrow balance
+    netLending: bigint;             // for eligibility check: aUSDC - debtUSDC
+    netBorrowing: bigint;           // for rewards: max (0, debtUSDC - aUSDC)
+    lastUpdatedBlock: number;       // track when position last changed
+    lastUpdatedTimestamp: number;   // calculate time delta between position changes
+}
+
+function getOrCreatePosition(
+    positions: Map<string, UserPosition>,
+    address: string,
+    blockNumber: number,
+    timestamp: number
+): UserPosition {
+    // get existing position
+    let position = positions.get(address);
+    // if not exist, create a new one
+    if (!position) {
+        position = {
+            address: address.toLowerCase(), // why lowercase?
+            aUsdcBalance: 0n, // why 0n? bitint literal?
+            debtUsdcBalance: 0n,
+            netLending: 0n,
+            netBorrowing: 0n,
+            lastUpdatedBlock: blockNumber,
+            lastUpdatedTimestamp: timestamp,
+        };
+        // add to map
+        positions.set(address, position);
+    }
+
+    return position;
+}
+
+type TaggedEvent = {
+    type: string,
+    event: ethers.EventLog | ethers.Log
+};
+
+async function queryEvents(
+    provider: ethers.JsonRpcProvider,
+    fromBlock: number,
+    toBlock: number
+): Promise<TaggedEvent[]> {
     // get aave v3 pool contract on base mainnet
     const poolAddress = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5";
     const POOL_ABI = [
@@ -30,6 +75,7 @@ async function queryEvents(provider: ethers.JsonRpcProvider, fromBlock: number, 
         "event Repay(address indexed reserve, address indexed user, address indexed repayer, uint256 amount, uint256 interestRateMode)",
     ];
     const poolContract = new ethers.Contract(poolAddress, POOL_ABI, provider);
+    
     // create filters for USDC only
     const usdcAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // base mainnet
     const supplyFilter = poolContract.filters.Supply(usdcAddress);
@@ -57,49 +103,107 @@ async function queryEvents(provider: ethers.JsonRpcProvider, fromBlock: number, 
         ...repayEvents.map(event => ({type: "Repay", event: event})),
     ];
 
-    // sort events chronologically: by block number, then transaction order
+    // sort events by block number, then log index
     allEvents.sort((a, b) => {
         if (a.event.blockNumber != b.event.blockNumber)
             return a.event.blockNumber - b.event.blockNumber;
-        return a.event.transactionIndex - b.event.transactionIndex;
+        return a.event.index - b.event.index;
     });
 
-    for (const event of allEvents){
+    return allEvents;
+}
+
+async function calculateUserPositions(
+    provider: ethers.JsonRpcProvider,
+    events: TaggedEvent[]
+): Promise<Map<string, UserPosition>> {
+    const positions = new Map<string, UserPosition>();
+    for (const {type, event} of events) {
+        if (!(event instanceof EventLog))
+            continue;
+        const block = await provider.getBlock(event.blockNumber);
+        if (!block){
+            console.warn(`Block not found: ${event.blockNumber}, skipping the event.`);
+            continue;
+        }
+        const timestamp = block.timestamp;
+        const user = event.args.onBehalfOf || event.args.user;
+        const position = getOrCreatePosition(positions, user.toLowerCase(), event.blockNumber, timestamp);
+        const amount = event.args.amount;
+        // based on event type, update position
+        switch (type){
+            case "Supply":
+                position.aUsdcBalance += amount;
+                break;
+            case "Withdraw":
+                position.aUsdcBalance -= amount;
+                break;
+            case "Borrow":
+                position.debtUsdcBalance += amount;
+                break;
+            case "Repay":
+                position.debtUsdcBalance -= amount;
+                break;
+        }
+        // calculate net lending and borrowing
+        position.netLending = position.aUsdcBalance - position.debtUsdcBalance;
+        position.netBorrowing = position.netLending < 0n? -position.netLending: 0n;
+        // update last updated block and timestamp
+        position.lastUpdatedBlock = event.blockNumber;
+        position.lastUpdatedTimestamp = timestamp;
+    }
+    return positions;
+}
+
+
+async function printAllEvents(events: TaggedEvent[]) {
+    for (const event of events){
         if (event.event instanceof EventLog) {
             console.log({
                 type: event.type,
                 user: event.event.args.user,
                 amount: ethers.formatUnits(event.event.args.amount, 6), // USDC has 6 decimals
                 block: event.event.blockNumber,
+                txIndex: event.event.transactionIndex,
+                logIndex: event.event.index,
             })
         }
     }
-
-    return allEvents;
 }
 
-// async function printAllEvents(events: {type: string, event: EventLog}[]) {
-//     for (const event of events){
-//         if (event.event instanceof EventLog) {
-//             console.log({
-//                 type: event.type,
-//                 user: event.event.args.user,
-//                 amount: ethers.formatUnits(event.event.args.amount, 6), // USDC has 6 decimals
-//                 block: event.event.blockNumber,
-//             })
-//         }
-//     }
-// }
+function printAllPositions(positions: Map<string, UserPosition>) {
+    for (const [address, pos] of positions) {
+        if (pos.aUsdcBalance < 0n){
+            console.log(`Skipping ${address} - incomplete history (negative supply)`);
+            continue;
+        }
+        console.log({
+            user: address,
+            supply: ethers.formatUnits(pos.aUsdcBalance, 6),
+            borrow: ethers.formatUnits(pos.debtUsdcBalance, 6),
+            netLending: ethers.formatUnits(pos.netLending, 6),
+            eligible: pos.netLending < 0n? "Yes" : "No"
+        })
+    }
+}
 
 async function main() {
-    const blockRange = 100;
-
+    const blockRange = 50;
     const provider = await getProvider();
     const blockNumber = await provider.getBlockNumber();
     const fromBlock = blockNumber - blockRange;
     const toBlock = blockNumber;
-    await queryEvents(provider, fromBlock, toBlock);
-    // const allEvents = await queryEvents(provider, fromBlock, toBlock);
+
+    // query all events in the block range
+    const allEvents = await queryEvents(provider, fromBlock, toBlock);
+
+    // calculate user positions based on events
+    const positions = await calculateUserPositions(provider, allEvents);
+
+    // print all user positions
+    printAllPositions(positions);
+
+    // print all events
     // await printAllEvents(allEvents);
 }
 
