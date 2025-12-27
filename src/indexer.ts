@@ -1,6 +1,14 @@
 import {ethers, EventLog} from "ethers";
 import * as dotenv from "dotenv";
 import * as path from "path";
+import {UserPosition} from "./types";
+import {
+    saveUserPosition,
+    getUserPosition,
+    saveIndexerState,
+    getIndexerState,
+    saveBatchUserPositions
+} from "./database";
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
@@ -18,16 +26,6 @@ async function getProvider() {
     const blockNumber = await provider.getBlockNumber();
     console.log("Connected to the chain! Block:", blockNumber);
     return provider;
-}
-
-interface UserPosition {
-    address: string;                // user address
-    aUsdcBalance: bigint;           // supply balance
-    debtUsdcBalance: bigint;        // borrow balance
-    netLending: bigint;             // for eligibility check: aUSDC - debtUSDC
-    netBorrowing: bigint;           // for rewards: max (0, debtUSDC - aUSDC)
-    lastUpdatedBlock: number;       // track when position last changed
-    lastUpdatedTimestamp: number;   // calculate time delta between position changes
 }
 
 function getOrCreatePosition(
@@ -188,11 +186,26 @@ function printAllPositions(positions: Map<string, UserPosition>) {
 }
 
 async function main() {
-    const blockRange = 50;
+    const blockRange = 100;
     const provider = await getProvider();
-    const blockNumber = await provider.getBlockNumber();
-    const fromBlock = blockNumber - blockRange;
-    const toBlock = blockNumber;
+    const currentBlock = await provider.getBlockNumber();
+
+    // check last indexed block from database
+    const indexState = getIndexerState();
+
+    let fromBlock: number;
+    if (indexState) {
+        // resume from last indexed block + 1
+        fromBlock = indexState.lastIndexBlock + 1;
+        console.log(`Resume from block ${fromBlock}`);
+    } else {
+        // start from the beginning
+        fromBlock = currentBlock - blockRange;
+        console.log(`First run - Start indexing from block ${fromBlock}`);
+    }
+
+    const toBlock = currentBlock;
+    console.log(`Indexing from block ${fromBlock} to ${toBlock}`);
 
     // query all events in the block range
     const allEvents = await queryEvents(provider, fromBlock, toBlock);
@@ -200,10 +213,23 @@ async function main() {
     // calculate user positions based on events
     const positions = await calculateUserPositions(provider, allEvents);
 
-    // print all user positions
-    printAllPositions(positions);
+    // save all user positions to database
+    saveBatchUserPositions(positions);
+    console.log(`Saved ${positions.size} user positions to db`);
 
-    // print all events
+    // get timestamp of current block
+    const currentBlockInfo = await provider.getBlock(currentBlock);
+    if (!currentBlockInfo) {
+        throw new Error(`Failed to fetch current block info for block ${currentBlock}`);
+    }
+    // save checkpoint
+    saveIndexerState(currentBlock, currentBlockInfo.timestamp);
+    console.log(`Updated indexer state to block ${currentBlock}`);
+
+    // print all user positions
+    // printAllPositions(positions);
+
+    // // print all events
     // await printAllEvents(allEvents);
 }
 
