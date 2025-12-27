@@ -99,6 +99,31 @@ export function getUserPosition(address: string): UserPosition | null {
     };
 }
 
+/* get all user positions */
+export function getAllUserPositions(): Map<string, UserPosition> {
+    // prepare sql statement
+    const stmt = db.prepare('SELECT * FROM user_positions');
+    // execute statement: return all rows as an array
+    const rows = stmt.all() as any[];
+
+    // create a map to hold user positions
+    const positions = new Map<string, UserPosition>();
+    // loop through each row and add to map
+    for (const row of rows) {
+        positions.set(row.address, {
+            address: row.address,
+            aUsdcBalance: BigInt(row.aUsdcBalance),
+            debtUsdcBalance: BigInt(row.debtUsdcBalance),
+            netLending: BigInt(row.netLending),
+            netBorrowing: BigInt(row.netBorrowing),
+            lastUpdatedBlock: row.lastUpdatedBlock,
+            lastUpdatedTimestamp: row.lastUpdatedTimestamp
+        })
+    }
+
+    return positions;
+}
+
 // ========================================
 // METHODS: Indexer State
 // ========================================
