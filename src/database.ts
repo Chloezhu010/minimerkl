@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import * as path from "path";
 import {UserPosition} from "./types";
+import { Campaign, UserReward } from "./campaigns";
 
 const dbPath = path.resolve(__dirname, '../data/miniMerkl.db');
 // create the db connection
@@ -25,6 +26,28 @@ db.exec(`
         id INTEGER PRIMARY KEY CHECK (id = 1),
         lastIndexBlock INTEGER NOT NULL,
         lastIndexTimestamp INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS campaigns (
+        id TEXT PRIMARY KEY,
+        rewardToken TEXT NOT NULL,
+        targetToken TEXT NOT NULL,
+        startTimestamp INTEGER NOT NULL,
+        endTimestamp INTEGER NOT NULL,
+        totalRewardBudget TEXT NOT NULL,
+        dailyRewardBudget TEXT NOT NULL,
+        status TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_rewards (
+        address TEXT NOT NULL,
+        campaignid TEXT NOT NULL,
+        rewardToken TEXT NOT NULL,
+        targetToken TEXT NOT NULL,
+        rewardAmount TEXT NOT NULL,
+        lastCalculatedBlock INTEGER NOT NULL,
+        lastCalculatedTimestamp INTEGER NOT NULL,
+        PRIMARY KEY (address, campaignid)
     );
 `);
 
@@ -167,6 +190,79 @@ export function getIndexerState(): {lastIndexBlock: number, lastIndexTimestamp: 
         lastIndexBlock: row.lastIndexBlock,
         lastIndexTimestamp: row.lastIndexTimestamp
     };
+}
+
+// ========================================
+// METHODS: Campaigns
+// ========================================
+
+export function saveCampaign(campaign: Campaign): void {
+    const stmt = db.prepare(`
+        INSERT OR REPLACE INTO campaigns
+        (id, rewardToken, targetToken, startTimestamp, endTimestamp,
+        totalRewardBudget, dailyRewardBudget, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    stmt.run(
+        campaign.id,
+        campaign.rewardToken,
+        campaign.targetToken,
+        campaign.startTimestamp,
+        campaign.endTimestamp,
+        campaign.totalRewardBudget.toString(), // convert to string
+        campaign.dailyRewardBudget.toString(), // convert to string
+        campaign.status
+    );
+}
+
+export function getActiveCampaigns(): Campaign[] {
+    const stmt = db.prepare(`SELECT * FROM campaigns WHERE status = 'active'`);
+    const rows = stmt.all() as any[];
+
+    return rows.map(row => ({
+        id: row.id,
+        rewardToken: row.rewardToken,
+        targetToken: row.targetToken,
+        startTimestamp: row.startTimestamp,
+        endTimestamp: row.endTimestamp,
+        totalRewardBudget: BigInt(row.totalRewardBudget),
+        dailyRewardBudget: BigInt(row.dailyRewardBudget),
+        status: row.status
+    }));
+}
+
+// ========================================
+// METHODS: User Rewards
+// ========================================
+
+export function saveUserReward(reward: UserReward): void {
+    const stmt = db.prepare(`
+        INSERT OR REPLACE INTO campaigns
+        (address, campaignid, rewardToken, rewardAmount, lastCalculatedBlock, lastCalculatedTimestamp)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+        reward.address,
+        reward.campaignid,
+        reward.rewardToken,
+        reward.rewardAmount.toString(),
+        reward.lastCalculatedBlock,
+        reward.lastCalculatedTimestamp
+    );
+}
+
+export function getUserReward(address: string): UserReward[] {
+    const stmt = db.prepare(`SELECT * FROM user_rewards WHERE address = ?`);
+    const rows = stmt.all(address.toLowerCase()) as any[];
+
+    return rows.map(row => ({
+        address: row.address,
+        campaignid: row.campaignid,
+        rewardToken: row.rewardToken,
+        rewardAmount: BigInt(row.rewardAmount),
+        lastCalculatedBlock: row.lastCalculatedBlock,
+        lastCalculatedTimestamp: row.lastCalculatedTimestamp
+    }));
 }
 
 // ========================================
