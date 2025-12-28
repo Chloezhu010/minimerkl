@@ -2,13 +2,6 @@ import {ethers, EventLog} from "ethers";
 import * as dotenv from "dotenv";
 import * as path from "path";
 import {UserPosition} from "./types";
-import {
-    saveUserPosition,
-    getUserPosition,
-    saveIndexerState,
-    getIndexerState,
-    saveBatchUserPositions
-} from "./database";
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
@@ -44,6 +37,9 @@ function getOrCreatePosition(
             debtUsdcBalance: 0n,
             netLending: 0n,
             netBorrowing: 0n,
+            aTokenBalanceTime: 0n,
+            debtTokenBalanceTime: 0n,
+            netBorrowBalanceTime: 0n,
             lastUpdatedBlock: blockNumber,
             lastUpdatedTimestamp: timestamp,
         };
@@ -116,6 +112,7 @@ export async function calculateUserPositions(
     events: TaggedEvent[]
 ): Promise<Map<string, UserPosition>> {
     const positions = new Map<string, UserPosition>();
+    // loop through each event and update user positions
     for (const {type, event} of events) {
         if (!(event instanceof EventLog))
             continue;
@@ -128,7 +125,14 @@ export async function calculateUserPositions(
         const user = event.args.onBehalfOf || event.args.user;
         const position = getOrCreatePosition(positions, user.toLowerCase(), event.blockNumber, timestamp);
         const amount = event.args.amount;
-        // based on event type, update position
+        
+        // update cumulative balance * time for rewards based on time delta
+        const timeDelta = timestamp - position.lastUpdatedTimestamp;
+        position.aTokenBalanceTime += position.aUsdcBalance * BigInt(timeDelta);
+        position.debtTokenBalanceTime += position.debtUsdcBalance * BigInt(timeDelta);
+        position.netBorrowBalanceTime += position.netBorrowing * BigInt(timeDelta);
+
+        // update position balance based on event type
         switch (type){
             case "Supply":
                 position.aUsdcBalance += amount;

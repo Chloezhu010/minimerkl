@@ -14,6 +14,9 @@ db.exec(`
         debtUsdcBalance TEXT NOT NULL,
         netLending TEXT NOT NULL,
         netBorrowing TEXT NOT NULL,
+        aTokenBalanceTime TEXT NOT NULL DEFAULT '0',
+        debtTokenBalanceTime TEXT NOT NULL DEFAULT '0',
+        netBorrowBalanceTime TEXT NOT NULL DEFAULT '0',
         lastUpdatedBlock INTEGER NOT NULL,
         lastUpdatedTimestamp INTEGER NOT NULL
     );
@@ -34,8 +37,10 @@ export function saveUserPosition(position: UserPosition): void {
     // prepare sql statement
     const stmt = db.prepare(`
         INSERT or REPLACE INTO user_positions
-        (address, aUsdcBalance, debtUsdcBalance, netLending, netBorrowing, lastUpdatedBlock, lastUpdatedTimestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (address, aUsdcBalance, debtUsdcBalance, netLending, netBorrowing, 
+        aTokenBalanceTime, debtTokenBalanceTime, netBorrowBalanceTime,
+        lastUpdatedBlock, lastUpdatedTimestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `); 
     // execute statement with data
     stmt.run (
@@ -44,6 +49,9 @@ export function saveUserPosition(position: UserPosition): void {
         position.debtUsdcBalance.toString(),
         position.netLending.toString(),
         position.netBorrowing.toString(),
+        position.aTokenBalanceTime.toString(),
+        position.debtTokenBalanceTime.toString(),
+        position.netBorrowBalanceTime.toString(),
         position.lastUpdatedBlock,
         position.lastUpdatedTimestamp
     );
@@ -54,8 +62,10 @@ export function saveBatchUserPositions(positions: Map<string, UserPosition>): vo
     // prepare sql statement
     const stmt = db.prepare(`
         INSERT or REPLACE INTO user_positions
-        (address, aUsdcBalance, debtUsdcBalance, netLending, netBorrowing, lastUpdatedBlock, lastUpdatedTimestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (address, aUsdcBalance, debtUsdcBalance, netLending, netBorrowing, 
+        aTokenBalanceTime, debtTokenBalanceTime, netBorrowBalanceTime,
+        lastUpdatedBlock, lastUpdatedTimestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     // use transaction for batch insert, wrap in insertBatch function
@@ -68,6 +78,9 @@ export function saveBatchUserPositions(positions: Map<string, UserPosition>): vo
                 position.debtUsdcBalance.toString(),
                 position.netLending.toString(),
                 position.netBorrowing.toString(),
+                position.aTokenBalanceTime.toString(),
+                position.debtTokenBalanceTime.toString(),
+                position.netBorrowBalanceTime.toString(),
                 position.lastUpdatedBlock,
                 position.lastUpdatedTimestamp
             )
@@ -94,6 +107,9 @@ export function getUserPosition(address: string): UserPosition | null {
         debtUsdcBalance: BigInt(row.debtUsdcBalance),
         netLending: BigInt(row.netLending),
         netBorrowing: BigInt(row.netBorrowing),
+        aTokenBalanceTime: BigInt(row.aTokenBalanceTime),
+        debtTokenBalanceTime: BigInt(row.debtTokenBalanceTime),
+        netBorrowBalanceTime: BigInt(row.netBorrowBalanceTime),
         lastUpdatedBlock: row.lastUpdatedBlock,
         lastUpdatedTimestamp: row.lastUpdatedTimestamp
     };
@@ -116,6 +132,9 @@ export function getAllUserPositions(): Map<string, UserPosition> {
             debtUsdcBalance: BigInt(row.debtUsdcBalance),
             netLending: BigInt(row.netLending),
             netBorrowing: BigInt(row.netBorrowing),
+            aTokenBalanceTime: BigInt(row.aTokenBalanceTime),
+            debtTokenBalanceTime: BigInt(row.debtTokenBalanceTime),
+            netBorrowBalanceTime: BigInt(row.netBorrowBalanceTime),
             lastUpdatedBlock: row.lastUpdatedBlock,
             lastUpdatedTimestamp: row.lastUpdatedTimestamp
         })

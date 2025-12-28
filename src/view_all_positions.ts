@@ -12,6 +12,7 @@ for (const [address, pos] of allPositions) {
         supply: ethers.formatUnits(pos.aUsdcBalance, 6),
         borrow: ethers.formatUnits(pos.debtUsdcBalance, 6),
         netLending: ethers.formatUnits(pos.netLending, 6),
-        eligible: pos.netLending < 0n? '✅ YES' : '❌ NO'
+        eligible: pos.netLending < 0n? '✅ YES' : '❌ NO',
+        netBorrowBalanceTime: pos.netBorrowBalanceTime
     })
 }
