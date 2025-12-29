@@ -49,6 +49,12 @@ db.exec(`
         lastCalculatedTimestamp INTEGER NOT NULL,
         PRIMARY KEY (address, campaignid)
     );
+
+    CREATE TABLE IF NOT EXISTS campaign_state (
+        campaignId TEXT PRIMARY KEY,
+        lastCalculatedBlock INTEGER NOT NULL,
+        lastCalculatedTimestamp INTEGER NOT NULL
+    );
 `);
 
 // ========================================
@@ -232,12 +238,42 @@ export function getActiveCampaigns(): Campaign[] {
 }
 
 // ========================================
+// METHODS: Campaign state
+// ========================================
+
+export function saveCampaignState(
+    campaignId: string,
+    lastCalculatedBlock: number, 
+    lastCalculatedTimestamp: number
+): void {
+    const stmt = db.prepare(`
+        INSERT or REPLACE INTO campaign_state
+        (campaignId, lastCalculatedBlock, lastCalculatedTimestamp)
+        VALUES (?, ?, ?)`);
+    stmt.run(campaignId, lastCalculatedBlock, lastCalculatedTimestamp);
+}
+
+export function getCampaignState(campaignId: string): 
+    {lastCalculatedBlock: number, lastCalculatedTimestamp: number} | null
+{
+    const stmt = db.prepare(`SELECT * FROM campaign_state WHERE id = ?`);
+    const row = stmt.get(campaignId) as any;
+    if (!row)
+        return null;
+
+    return {
+        lastCalculatedBlock: row.lastCalculatedBlock,
+        lastCalculatedTimestamp: row.lastCalculatedTimestamp
+    };
+}
+
+// ========================================
 // METHODS: User Rewards
 // ========================================
 
 export function saveUserReward(reward: UserReward): void {
     const stmt = db.prepare(`
-        INSERT OR REPLACE INTO campaigns
+        INSERT OR REPLACE INTO user_rewards
         (address, campaignid, rewardToken, rewardAmount, lastCalculatedBlock, lastCalculatedTimestamp)
         VALUES (?, ?, ?, ?, ?, ?)
     `);

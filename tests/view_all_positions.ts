@@ -1,5 +1,5 @@
-import { getAllUserPositions } from "./database";
-import {UserPosition} from "./types";
+import { getAllUserPositions } from "../src/database";
+import {UserPosition} from "../src/types";
 import { ethers } from "ethers";
 
 // retrieve all user position
