@@ -166,7 +166,7 @@ export function getAllUserPositions(): Map<string, UserPosition> {
             netBorrowBalanceTime: BigInt(row.netBorrowBalanceTime),
             lastUpdatedBlock: row.lastUpdatedBlock,
             lastUpdatedTimestamp: row.lastUpdatedTimestamp
-        })
+        });
     }
 
     return positions;
