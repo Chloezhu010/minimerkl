@@ -1,7 +1,6 @@
 import Database from "better-sqlite3";
 import * as path from "path";
-import {UserPosition} from "./types";
-import { Campaign, UserReward } from "./campaigns";
+import { UserPosition, Campaign, UserReward } from "./types";
 
 const dbPath = path.resolve(__dirname, '../data/miniMerkl.db');
 // create the db connection
@@ -43,7 +42,6 @@ db.exec(`
         address TEXT NOT NULL,
         campaignid TEXT NOT NULL,
         rewardToken TEXT NOT NULL,
-        targetToken TEXT NOT NULL,
         rewardAmount TEXT NOT NULL,
         lastCalculatedBlock INTEGER NOT NULL,
         lastCalculatedTimestamp INTEGER NOT NULL,
@@ -256,7 +254,7 @@ export function saveCampaignState(
 export function getCampaignState(campaignId: string): 
     {lastCalculatedBlock: number, lastCalculatedTimestamp: number} | null
 {
-    const stmt = db.prepare(`SELECT * FROM campaign_state WHERE id = ?`);
+    const stmt = db.prepare(`SELECT * FROM campaign_state WHERE campaignId = ?`);
     const row = stmt.get(campaignId) as any;
     if (!row)
         return null;

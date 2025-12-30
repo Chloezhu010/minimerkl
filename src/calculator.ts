@@ -58,8 +58,8 @@ export async function calculateRewards(){
             // update campaign state
             saveCampaignState(
                 cam.id,
-                cam.currentBlock,
-                cam.currentTimestamp
+                currentBlock,
+                currentTimestamp
             );
             // log campaign id and nb of users
             console.log(`Campaign ${cam.id}: Calculated rewards for ${rewardMap.size} users`);
@@ -135,7 +135,7 @@ function isEligible(
     position: UserPosition,
     campaign: Campaign
 ): boolean {
-    return position.netLending < 0n;
+    return position.netBorrowing > 0n;
 }
 
 /* Calculate time-weighted share for one user */
