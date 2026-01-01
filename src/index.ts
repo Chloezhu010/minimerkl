@@ -17,8 +17,8 @@ async function main(){
     console.log('🚀 Starting miniMerkl indexer...');
 
     const blockRange = 30;
-        const provider = await getProvider();
-        const currentBlock = await provider.getBlockNumber();
+    const provider = await getProvider();
+    const currentBlock = await provider.getBlockNumber();
     // check checkpoint
         // check last indexed block from database
         const indexState = getIndexerState();
